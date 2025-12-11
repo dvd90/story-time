@@ -1,3 +1,4 @@
+import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { AccessToken, type AccessTokenOptions, type VideoGrant } from 'livekit-server-sdk';
 import { RoomConfiguration } from '@livekit/protocol';
@@ -13,6 +14,7 @@ type ConnectionDetails = {
 const API_KEY = process.env.LIVEKIT_API_KEY;
 const API_SECRET = process.env.LIVEKIT_API_SECRET;
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // don't cache the results
 export const revalidate = 0;
@@ -32,7 +34,34 @@ export async function POST(req: Request) {
     // Parse agent configuration from request body
     const body = await req.json();
     const agentName: string = body?.room_config?.agents?.[0]?.agent_name;
-    const voiceId: string | undefined = body?.voice_id;
+    
+    // Get the user's voice ID from our backend API
+    let voiceId: string | undefined = 'SF9uvIlY93SJRMdV5jeP'
+    
+    // If no voice_id in request, try to fetch from our API
+    if (!voiceId) {
+      try {
+        const { getToken } = await auth();
+        const token = await getToken();
+        
+        if (token) {
+          const response = await fetch(`${API_BASE}/api/onboarding/current`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            cache: 'no-store',
+          });
+          
+          if (response.ok) {
+            const userData = await response.json();
+            voiceId = userData.anamVoiceId;
+            console.log(`🎤 Using voice ID from user profile: ${voiceId}`);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to fetch user voice ID:', error);
+      }
+    }
 
     // Generate participant token
     const participantName = 'user';
