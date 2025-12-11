@@ -2,21 +2,34 @@
   <img src="./.github/assets/livekit-mark.png" alt="LiveKit logo" width="100" height="100">
 </a>
 
-# LiveKit Agents Starter - Node.js
+# Story Time Server - Handler-Based Voice AI Agent
 
-A complete starter project for building voice AI apps with [LiveKit Agents for Node.js](https://github.com/livekit/agents-js) and [LiveKit Cloud](https://cloud.livekit.io/).
+A flexible, extensible LiveKit Agents voice AI assistant built with a **handler-based architecture** for processing actions from frontend applications via **data events**.
 
-The starter project includes:
+## What's Different About This Agent?
 
-- A simple voice AI assistant, ready for extension and customization
-- A voice AI pipeline with [models](https://docs.livekit.io/agents/models) from OpenAI, Cartesia, and AssemblyAI served through LiveKit Cloud
-  - Easily integrate your preferred [LLM](https://docs.livekit.io/agents/models/llm/), [STT](https://docs.livekit.io/agents/models/stt/), and [TTS](https://docs.livekit.io/agents/models/tts/) instead, or swap to a realtime model like the [OpenAI Realtime API](https://docs.livekit.io/agents/models/realtime/openai)
-- [LiveKit Turn Detector](https://docs.livekit.io/agents/build/turns/turn-detector/) for contextually-aware speaker detection, with multilingual support
+This is not just a standard voice assistant - it features an **abstract handler system** with **room event subscriptions**:
+
+- ✅ Receives action requests via LiveKit data events (pub/sub pattern)
+- ✅ Routes actions to appropriate handlers dynamically
+- ✅ Makes it trivial to add new capabilities without touching core agent code
+- ✅ Includes three built-in handlers: `say`, `store`, and `play`
+- ✅ Provides a clean, type-safe API for frontend integration
+- ✅ Session management with registry pattern
+- ✅ Clean lifecycle management with proper cleanup
+
+## Built-in Features
+
+- **Say Handler**: Make the agent speak any text on demand
+- **Store Handler**: Store text with unique IDs for later retrieval (in-memory storage)
+- **Play Handler**: Retrieve and play stored text by ID
+- **Voice AI Pipeline**: Uses OpenAI, Cartesia, and AssemblyAI via [LiveKit Inference](https://docs.livekit.io/agents/models)
+- [LiveKit Turn Detector](https://docs.livekit.io/agents/build/turns/turn-detector/) for contextually-aware speaker detection
 - [Background voice cancellation](https://docs.livekit.io/home/cloud/noise-cancellation/)
 - Integrated [metrics and logging](https://docs.livekit.io/agents/build/metrics/)
-- A Dockerfile ready for [production deployment](https://docs.livekit.io/agents/ops/deployment/)
+- Production-ready Dockerfile
 
-This starter app is compatible with any [custom web/mobile frontend](https://docs.livekit.io/agents/start/frontend/) or [SIP-based telephony](https://docs.livekit.io/agents/start/telephony/).
+This agent is compatible with any [custom web/mobile frontend](https://docs.livekit.io/agents/start/frontend/) or [SIP-based telephony](https://docs.livekit.io/agents/start/telephony/).
 
 ## Coding agents and MCP
 
@@ -108,13 +121,94 @@ Get started quickly with our pre-built frontend starter apps, or add telephony s
 
 For advanced customization, see the [complete frontend guide](https://docs.livekit.io/agents/start/frontend/).
 
-## Using this template repo for your own project
+## Handler-Based Architecture
 
-Once you've started your own project based on this repo, you should:
+### Using from Frontend
 
-1. **Check in your `pnpm-lock.yaml`**: This file is currently untracked for the template, but you should commit it to your repository for reproducible builds and proper configuration management. (The same applies to `livekit.toml`, if you run your agents in LiveKit Cloud)
+Quick example of calling actions from your web app:
 
-2. **Remove the git tracking test**: Delete the "Check files not tracked in git" step from `.github/workflows/tests.yml` since you'll now want this file to be tracked. These are just there for development purposes in the template repo itself.
+```typescript
+import { Room } from 'livekit-client';
+
+// Connect to the room
+const room = new Room();
+await room.connect(LIVEKIT_URL, token);
+
+// Find the agent
+const agent = Array.from(room.remoteParticipants.values()).find((p) => p.kind === 'agent');
+
+// Make the agent say something
+const response = await room.localParticipant.performRpc({
+  destinationIdentity: agent.identity,
+  method: 'processAction',
+  payload: JSON.stringify({
+    action: 'say',
+    payload: { text: 'Hello from the frontend!' },
+  }),
+});
+
+console.log(JSON.parse(response)); // { success: true, ... }
+```
+
+### Built-in Actions
+
+| Action  | Description               | Payload                        |
+| ------- | ------------------------- | ------------------------------ |
+| `say`   | Make the agent speak text | `{ text: string }`             |
+| `store` | Store text with an ID     | `{ id: string, text: string }` |
+| `play`  | Play stored text by ID    | `{ id: string }`               |
+
+### Creating Custom Handlers
+
+Add new capabilities by creating a handler:
+
+```typescript
+// src/handlers/my-handler.ts
+import { BaseActionHandler, type HandlerContext } from './base.js';
+
+export class MyHandler extends BaseActionHandler {
+  constructor() {
+    super('myAction');
+  }
+
+  async handle(context: HandlerContext) {
+    const { session } = context;
+    await session.say('Handling my custom action!');
+    return this.success('Done!');
+  }
+}
+```
+
+Register it in `src/agent.ts`:
+
+```typescript
+handlerManager.registerAll([
+  new SayHandler(),
+  new StoreHandler(),
+  new PlayHandler(),
+  new MyHandler(), // Add here
+]);
+```
+
+### Documentation
+
+- **[HANDLERS.md](./HANDLERS.md)**: Complete handler system documentation with examples
+- **[examples/frontend-usage.ts](./examples/frontend-usage.ts)**: Frontend integration guide with React hooks
+- **[AGENTS.md](./AGENTS.md)**: General LiveKit Agents guidance
+
+### Project Structure
+
+```
+src/
+├── agent.ts              # Main agent entry point
+└── handlers/
+    ├── base.ts          # Base handler interface
+    ├── manager.ts       # Handler registration & routing
+    ├── say-handler.ts   # Built-in: say action
+    ├── store-handler.ts # Built-in: store action
+    ├── play-handler.ts  # Built-in: play action
+    └── index.ts         # Exports
+```
 
 ## Deploying to production
 
