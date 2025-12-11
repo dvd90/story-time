@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.36.2",
     "@livekit/components-react": "^2.9.15",
     "@livekit/protocol": "^1.40.0",
     "@phosphor-icons/react": "^2.1.8",

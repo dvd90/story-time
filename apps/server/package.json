@@ -10,6 +10,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@clerk/express": "^1.7.57",
     "cors": "^2.8.5",
     "express": "^4.21.0"
   },
