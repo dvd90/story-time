@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     const agentName: string = body?.room_config?.agents?.[0]?.agent_name;
     
     // Get the user's voice ID from our backend API
-    let voiceId: string | undefined = 'SF9uvIlY93SJRMdV5jeP'
+    let voiceId: string | undefined
     
     // If no voice_id in request, try to fetch from our API
     if (!voiceId) {

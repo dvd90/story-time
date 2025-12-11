@@ -9,6 +9,7 @@ export default function SignUpPage() {
           <p className="mt-2 text-slate-300">Create an account to start your magical adventure</p>
         </div>
         <SignUp
+          forceRedirectUrl="/onboarding"
           appearance={{
             elements: {
               rootBox: 'mx-auto',

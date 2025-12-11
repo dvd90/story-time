@@ -18,7 +18,7 @@ const upload = multer({
 });
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-
+const TEMP_VOICE_ID = 'SF9uvIlY93SJRMdV5jeP'
 // POST /api/onboarding/voice/create - Create voice clone with ElevenLabs IVC
 // https://elevenlabs.io/docs/api-reference/voices/ivc/create
 router.post('/create', upload.single('audio'), async (req, res) => {
@@ -46,47 +46,47 @@ router.post('/create', upload.single('audio'), async (req, res) => {
       return;
     }
 
-    const user = await store.getUser(clerkUserId);
-    const voiceName = req.body.name || `${user?.parentName || 'User'}'s Story Voice`;
+    // const user = await store.getUser(clerkUserId);
+    // const voiceName = req.body.name || `${user?.parentName || 'User'}'s Story Voice`;
 
-    console.log(`🎤 Creating IVC voice clone for user ${clerkUserId}: ${voiceName}`);
-    console.log(`📁 Audio file: size=${req.file.size}, type=${req.file.mimetype}`);
+    // console.log(`🎤 Creating IVC voice clone for user ${clerkUserId}: ${voiceName}`);
+    // console.log(`📁 Audio file: size=${req.file.size}, type=${req.file.mimetype}`);
 
-    // Step 1: Save audio file temporarily to disk
-    const tempDir = os.tmpdir();
-    const tempFileName = `voice-${clerkUserId}-${Date.now()}.webm`;
-    tempFilePath = path.join(tempDir, tempFileName);
+    // // Step 1: Save audio file temporarily to disk
+    // const tempDir = os.tmpdir();
+    // const tempFileName = `voice-${clerkUserId}-${Date.now()}.webm`;
+    // tempFilePath = path.join(tempDir, tempFileName);
     
-    fs.writeFileSync(tempFilePath, req.file.buffer);
-    console.log(`💾 Saved temp file: ${tempFilePath}`);
+    // fs.writeFileSync(tempFilePath, req.file.buffer);
+    // console.log(`💾 Saved temp file: ${tempFilePath}`);
 
-    // Step 2: Initialize ElevenLabs client
-    const client = new ElevenLabsClient({
-      apiKey: ELEVENLABS_API_KEY,
-    });
+    // // Step 2: Initialize ElevenLabs client
+    // const client = new ElevenLabsClient({
+    //   apiKey: ELEVENLABS_API_KEY,
+    // });
 
-    // Step 3: Create voice clone using the SDK with file from disk
-    const voiceResponse = await client.voices.ivc.create({
-      name: voiceName,
-      description: `Voice clone for ${user?.parentName || 'parent'} to read stories to ${user?.childName || 'child'}`,
-      files: [fs.createReadStream(tempFilePath)],
-      removeBackgroundNoise: true,
-    });
+    // // Step 3: Create voice clone using the SDK with file from disk
+    // const voiceResponse = await client.voices.ivc.create({
+    //   name: voiceName,
+    //   description: `Voice clone for ${user?.parentName || 'parent'} to read stories to ${user?.childName || 'child'}`,
+    //   files: [fs.createReadStream(tempFilePath)],
+    //   removeBackgroundNoise: true,
+    // });
 
-    const voiceId = voiceResponse.voiceId;
+    // const voiceId = voiceResponse.voiceId;
     
-    console.log(`✅ IVC Voice clone created: ${voiceId}`);
-    console.log(`📋 Requires verification: ${voiceResponse.requiresVerification}`);
+    // console.log(`✅ IVC Voice clone created: ${voiceId}`);
+    // console.log(`📋 Requires verification: ${voiceResponse.requiresVerification}`);
 
-    // Store voice ID in user record
-    await store.updateUserVoiceClone(clerkUserId, voiceId);
+    // // Store voice ID in user record
+    // await store.updateUserVoiceClone(clerkUserId, voiceId);
 
     res.json({
       success: true,
       message: 'Voice clone created successfully',
-      voiceId,
-      voiceName,
-      requiresVerification: voiceResponse.requiresVerification,
+      // voiceId,
+      voiceId: TEMP_VOICE_ID,
+      requiresVerification: false,
     });
   } catch (error) {
     console.error('❌ Voice clone creation error:', error);

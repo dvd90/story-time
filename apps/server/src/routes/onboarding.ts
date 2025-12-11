@@ -4,6 +4,9 @@ import { store } from '../store.js';
 
 const router = Router();
 
+// Temporary hardcoded voice ID while IVC is being set up
+const TEMP_VOICE_ID = 'YEPxsTk32dk1sVTotPBJ'
+
 // GET /api/onboarding/status - Check if user has completed onboarding
 router.get('/status', async (req, res) => {
   try {
@@ -45,10 +48,11 @@ router.post('/', async (req, res) => {
       return;
     }
 
-    // Save initial user data (onboarding not complete yet)
+    // Save initial user data with temporary voice ID
     const userData = await store.saveUser(clerkUserId, {
       parentName: parentName.trim(),
       childName: childName.trim(),
+      anamVoiceId: TEMP_VOICE_ID, // Temporary hardcoded voice ID
       onboardingComplete: false,
     });
 

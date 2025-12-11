@@ -9,6 +9,7 @@ export default function SignInPage() {
           <p className="mt-2 text-slate-300">Sign in to continue your story adventure</p>
         </div>
         <SignIn
+          forceRedirectUrl="/onboarding"
           appearance={{
             elements: {
               rootBox: 'mx-auto',
