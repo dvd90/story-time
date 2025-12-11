@@ -1,0 +1,11 @@
+{
+  "name": "@story-time/client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Client dev server not configured yet'",
+    "build": "echo 'Client build not configured yet'",
+    "start": "echo 'Client start not configured yet'",
+    "lint": "echo 'Client lint not configured yet'"
+  }
+}
