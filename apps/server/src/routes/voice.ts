@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
-import FormData from 'form-data';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { getUserId } from '../middleware/auth.js';
 import { store } from '../store.js';
 
@@ -15,10 +18,12 @@ const upload = multer({
 });
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1';
 
-// POST /api/onboarding/voice/create - Create voice clone with ElevenLabs
+// POST /api/onboarding/voice/create - Create voice clone with ElevenLabs IVC
+// https://elevenlabs.io/docs/api-reference/voices/ivc/create
 router.post('/create', upload.single('audio'), async (req, res) => {
+  let tempFilePath: string | null = null;
+
   try {
     const clerkUserId = getUserId(req);
     if (!clerkUserId) {
@@ -44,37 +49,34 @@ router.post('/create', upload.single('audio'), async (req, res) => {
     const user = await store.getUser(clerkUserId);
     const voiceName = req.body.name || `${user?.parentName || 'User'}'s Story Voice`;
 
-    console.log(`🎤 Creating voice clone for user ${clerkUserId}: ${voiceName}`);
+    console.log(`🎤 Creating IVC voice clone for user ${clerkUserId}: ${voiceName}`);
+    console.log(`📁 Audio file: size=${req.file.size}, type=${req.file.mimetype}`);
 
-    // Create form data for ElevenLabs API
-    const formData = new FormData();
-    formData.append('name', voiceName);
-    formData.append('description', `Voice clone for ${user?.parentName || 'parent'} to read stories to ${user?.childName || 'child'}`);
-    formData.append('files', req.file.buffer, {
-      filename: 'voice-sample.webm',
-      contentType: req.file.mimetype || 'audio/webm',
-    });
-
-    // Call ElevenLabs API to add voice
-    const response = await fetch(`${ELEVENLABS_API_URL}/voices/add`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
-        ...formData.getHeaders(),
-      },
-      body: formData as unknown as BodyInit,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ ElevenLabs API error:', response.status, errorText);
-      throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
-    }
-
-    const voiceData = await response.json();
-    const voiceId = voiceData.voice_id;
+    // Step 1: Save audio file temporarily to disk
+    const tempDir = os.tmpdir();
+    const tempFileName = `voice-${clerkUserId}-${Date.now()}.webm`;
+    tempFilePath = path.join(tempDir, tempFileName);
     
-    console.log(`✅ Voice clone created: ${voiceId}`);
+    fs.writeFileSync(tempFilePath, req.file.buffer);
+    console.log(`💾 Saved temp file: ${tempFilePath}`);
+
+    // Step 2: Initialize ElevenLabs client
+    const client = new ElevenLabsClient({
+      apiKey: ELEVENLABS_API_KEY,
+    });
+
+    // Step 3: Create voice clone using the SDK with file from disk
+    const voiceResponse = await client.voices.ivc.create({
+      name: voiceName,
+      description: `Voice clone for ${user?.parentName || 'parent'} to read stories to ${user?.childName || 'child'}`,
+      files: [fs.createReadStream(tempFilePath)],
+      removeBackgroundNoise: true,
+    });
+
+    const voiceId = voiceResponse.voiceId;
+    
+    console.log(`✅ IVC Voice clone created: ${voiceId}`);
+    console.log(`📋 Requires verification: ${voiceResponse.requiresVerification}`);
 
     // Store voice ID in user record
     await store.updateUserVoiceClone(clerkUserId, voiceId);
@@ -84,6 +86,7 @@ router.post('/create', upload.single('audio'), async (req, res) => {
       message: 'Voice clone created successfully',
       voiceId,
       voiceName,
+      requiresVerification: voiceResponse.requiresVerification,
     });
   } catch (error) {
     console.error('❌ Voice clone creation error:', error);
@@ -92,6 +95,16 @@ router.post('/create', upload.single('audio'), async (req, res) => {
       error: 'Failed to create voice clone',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
+  } finally {
+    // Clean up temp file
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+        console.log(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+      } catch (cleanupError) {
+        console.warn('⚠️ Failed to clean up temp file:', cleanupError);
+      }
+    }
   }
 });
 
