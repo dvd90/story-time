@@ -36,6 +36,7 @@
     "@langchain/core": "^1.1.4",
     "@langchain/openai": "^1.1.3",
     "@livekit/agents": "^1.0.21",
+    "@livekit/agents-plugin-deepgram": "^1.0.27",
     "@livekit/agents-plugin-elevenlabs": "^1.0.27",
     "@livekit/agents-plugin-livekit": "^1.0.21",
     "@livekit/agents-plugin-silero": "^1.0.21",

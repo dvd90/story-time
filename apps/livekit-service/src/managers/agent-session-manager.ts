@@ -1,5 +1,6 @@
 import type { JobContext } from '@livekit/agents';
 import { inference, metrics, voice } from '@livekit/agents';
+import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as elevenlabs from '@livekit/agents-plugin-elevenlabs';
 import * as livekit from '@livekit/agents-plugin-livekit';
 import * as silero from '@livekit/agents-plugin-silero';
@@ -103,9 +104,6 @@ IMPORTANT:
     return DEFAULT_VOICE_ID;
   }
 
-  /**
-   * Initialize the agent session
-   */
   async initialize(): Promise<void> {
     await this.initializeRoom();
     this.setupMetricsCollection();
@@ -163,13 +161,13 @@ With a little flick of her wrist, Tilly opened the chest, revealing a dazzling a
    */
   async updateVoiceId(newVoiceId: string): Promise<void> {
     console.log(`Updating voice ID from ${this.voiceId} to ${newVoiceId}`);
-    this.voiceId = 'YEPxsTk32dk1sVTotPBJ';
+    this.voiceId = newVoiceId;
 
     // Create new TTS instance with updated voice
     const newTts = new elevenlabs.TTS({
-      modelID: process.env.MODEL_ID!,
-      voice: { id: 'YEPxsTk32dk1sVTotPBJ', name: 'Mike', category: 'premium' },
-      apiKey: 'sk_1ccaaa5fdebadda255af4c41d8802042458231ab4155bac9',
+      modelID: 'eleven_turbo_v2_5',
+      voice: { id: newVoiceId, name: 'custom', category: 'cloned' },
+      apiKey: process.env.ELEVENLABS_API_KEY!,
     });
 
     // Update the session's TTS
@@ -184,9 +182,10 @@ With a little flick of her wrist, Tilly opened the chest, revealing a dazzling a
    */
   private async createVoicePipeline(): Promise<voice.AgentSession> {
     const session = new voice.AgentSession({
-      // Speech-to-text (STT)
-      stt: new inference.STT({
-        model: 'assemblyai/universal-streaming',
+      // Speech-to-text (STT) - Deepgram
+      stt: new deepgram.STT({
+        apiKey: process.env.DEEPGRAM_API_KEY!,
+        model: 'nova-3',
         language: 'en',
       }),
 
@@ -195,11 +194,11 @@ With a little flick of her wrist, Tilly opened the chest, revealing a dazzling a
         model: 'openai/gpt-4.1-mini',
       }),
 
-      // Text-to-speech (TTS) - ElevenLabs
-      tts: new inference.TTS({
-        model: 'elevenlabs/eleven_turbo_v2_5',
-        voice: this.voiceId,
-        language: 'en',
+      // Text-to-speech (TTS) - ElevenLabs via plugin
+      tts: new elevenlabs.TTS({
+        modelID: 'eleven_turbo_v2_5',
+        voice: { id: this.voiceId, name: 'custom', category: 'cloned' },
+        apiKey: process.env.ELEVENLABS_API_KEY!,
       }),
 
       // Turn detection

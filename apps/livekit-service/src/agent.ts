@@ -20,5 +20,5 @@ export default defineAgent({
 });
 
 cli.runApp(
-  new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName: 'story-time-agent-test' }),
+  new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName: 'story-time-agent' }),
 );
