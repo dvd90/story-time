@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm --filter @story-time/client build",
+  "outputDirectory": "apps/client/.next",
+  "installCommand": "pnpm install --filter @story-time/client...",
+  "framework": "nextjs"
+}
