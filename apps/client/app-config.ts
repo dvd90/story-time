@@ -17,6 +17,10 @@ export interface AppConfig {
   // for LiveKit Cloud Sandbox
   sandboxId?: string;
   agentName?: string;
+
+  // Voice configuration
+  defaultVoiceId?: string;
+  supportsVoiceSelection?: boolean;
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
@@ -37,5 +41,9 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
 
   // for LiveKit Cloud Sandbox
   sandboxId: undefined,
-  agentName: 'agent-starter-node',
+  agentName: 'story-time-agent',
+
+  // Voice configuration
+  defaultVoiceId: 'Xb7hH8MSUJpSbSDYk0k2', // Alice - friendly British woman
+  supportsVoiceSelection: true,
 };

@@ -1,7 +1,13 @@
 import type { JobContext } from '@livekit/agents';
 import type { voice } from '@livekit/agents';
-import { PlayHandler, SayHandler, StoreHandler } from '../handlers/index.js';
-import { HandlerManager } from '../handlers/manager.js';
+import {
+  ChangeVoiceHandler,
+  HandlerManager,
+  PlayHandler,
+  SayHandler,
+  StoreHandler,
+} from '../handlers/index.js';
+import { SessionRegistry } from './session-registry.js';
 
 /**
  * Data packet structure
@@ -38,13 +44,15 @@ export class RoomEventHandler {
     topic?: string,
   ) => Promise<void>;
   private handlerManager: HandlerManager;
+  private sessionRegistry: SessionRegistry;
 
-  constructor(context: RoomEventContext) {
+  constructor(context: RoomEventContext, sessionRegistry: SessionRegistry) {
     this.context = context;
+    this.sessionRegistry = sessionRegistry;
     this.boundHandleDataReceived = this.handleDataReceived.bind(this);
 
     // Initialize handler manager
-    this.handlerManager = new HandlerManager(context.ctx, context.session);
+    this.handlerManager = new HandlerManager(context.ctx, context.session, context.roomName);
     this.registerHandlers();
   }
 
@@ -52,7 +60,12 @@ export class RoomEventHandler {
    * Register all action handlers
    */
   private registerHandlers(): void {
-    this.handlerManager.registerAll([new SayHandler(), new StoreHandler(), new PlayHandler()]);
+    this.handlerManager.registerAll([
+      new SayHandler(),
+      new StoreHandler(),
+      new PlayHandler(),
+      new ChangeVoiceHandler(this.sessionRegistry),
+    ]);
 
     console.log(
       `Handlers registered for room ${this.context.roomName}: ${this.handlerManager.getActionNames().join(', ')}`,

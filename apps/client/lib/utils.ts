@@ -99,9 +99,10 @@ export function getStyles(appConfig: AppConfig) {
 /**
  * Get a token source for a sandboxed LiveKit session
  * @param appConfig - The app configuration
+ * @param voiceId - Optional ElevenLabs voice ID to use for the agent
  * @returns A token source for a sandboxed LiveKit session
  */
-export function getSandboxTokenSource(appConfig: AppConfig) {
+export function getSandboxTokenSource(appConfig: AppConfig, voiceId?: string) {
   return TokenSource.custom(async () => {
     const url = new URL(process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT!, window.location.origin);
     const sandboxId = appConfig.sandboxId ?? '';
@@ -120,6 +121,41 @@ export function getSandboxTokenSource(appConfig: AppConfig) {
         },
         body: JSON.stringify({
           room_config: roomConfig,
+          voice_id: voiceId,
+        }),
+      });
+      return await res.json();
+    } catch (error) {
+      console.error('Error fetching connection details:', error);
+      throw new Error('Error fetching connection details!');
+    }
+  });
+}
+
+/**
+ * Get a token source for a standard (non-sandbox) LiveKit session
+ * @param appConfig - The app configuration
+ * @param voiceId - Optional ElevenLabs voice ID to use for the agent
+ * @returns A token source for a standard LiveKit session
+ */
+export function getStandardTokenSource(appConfig: AppConfig, voiceId?: string) {
+  return TokenSource.custom(async () => {
+    const url = new URL('/api/connection-details', window.location.origin);
+    const roomConfig = appConfig.agentName
+      ? {
+          agents: [{ agent_name: appConfig.agentName }],
+        }
+      : undefined;
+
+    try {
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          room_config: roomConfig,
+          voice_id: voiceId,
         }),
       });
       return await res.json();

@@ -23,7 +23,9 @@ This is not just a standard voice assistant - it features an **abstract handler 
 - **Say Handler**: Make the agent speak any text on demand
 - **Store Handler**: Store text with unique IDs for later retrieval (in-memory storage)
 - **Play Handler**: Retrieve and play stored text by ID
-- **Voice AI Pipeline**: Uses OpenAI, Cartesia, and AssemblyAI via [LiveKit Inference](https://docs.livekit.io/agents/models)
+- **Change Voice Handler**: Dynamically change the TTS voice during a session
+- **ElevenLabs TTS**: High-quality text-to-speech with customizable voice IDs
+- **Voice AI Pipeline**: Uses OpenAI for LLM, ElevenLabs for TTS, and AssemblyAI for STT via [LiveKit Inference](https://docs.livekit.io/agents/models)
 - [LiveKit Turn Detector](https://docs.livekit.io/agents/build/turns/turn-detector/) for contextually-aware speaker detection
 - [Background voice cancellation](https://docs.livekit.io/home/cloud/noise-cancellation/)
 - Integrated [metrics and logging](https://docs.livekit.io/agents/build/metrics/)
@@ -121,6 +123,71 @@ Get started quickly with our pre-built frontend starter apps, or add telephony s
 
 For advanced customization, see the [complete frontend guide](https://docs.livekit.io/agents/start/frontend/).
 
+## ElevenLabs Voice Configuration
+
+This agent uses **ElevenLabs TTS** via LiveKit Inference for high-quality text-to-speech. You can customize the voice used by the agent in two ways:
+
+### 1. Setting Voice ID During Room Creation
+
+Pass a `voice_id` when creating a room connection from your frontend:
+
+```typescript
+const response = await fetch('/api/connection-details', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    room_config: {
+      agents: [{ agent_name: 'story-time-agent' }]
+    },
+    voice_id: 'Xb7hH8MSUJpSbSDYk0k2' // ElevenLabs voice ID
+  }),
+});
+```
+
+If no `voice_id` is provided, the agent will use the default voice: **Alice** (`Xb7hH8MSUJpSbSDYk0k2`) - a clear and engaging, friendly British woman's voice.
+
+### 2. Changing Voice During Session
+
+You can dynamically change the voice after a user creates an account or at any time during the session:
+
+```typescript
+// Send change_voice action via data channel
+await room.localParticipant.publishData(
+  new TextEncoder().encode(JSON.stringify({
+    action: 'change_voice',
+    payload: { voice_id: 'iP95p4xoKVk53GoZ742B' } // Chris - Natural American male
+  })),
+  { reliable: true }
+);
+
+// Listen for the response
+room.on('dataReceived', (payload, participant, kind, topic) => {
+  if (topic === 'action-response') {
+    const response = JSON.parse(new TextDecoder().decode(payload));
+    console.log(response); // { success: true, message: 'Voice changed successfully', ... }
+  }
+});
+```
+
+### Available ElevenLabs Voices
+
+The agent supports all default voices from the [ElevenLabs voice library](https://elevenlabs.io/app/default-voices). Here are some popular options:
+
+| Name    | Description                                | Language | Voice ID                     |
+| ------- | ------------------------------------------ | -------- | ---------------------------- |
+| Alice   | Clear and engaging, friendly British woman | en-GB    | `Xb7hH8MSUJpSbSDYk0k2` (default) |
+| Chris   | Natural and real American male             | en-US    | `iP95p4xoKVk53GoZ742B`       |
+| Jessica | Young and popular, playful American female | en-US    | `cgSgspJ2msm6clMCkdW9`       |
+| Eric    | A smooth tenor Mexican male                | es-MX    | `cjVigY5qzO86Huf0OWal`       |
+
+To find more voices, visit the [ElevenLabs voice library](https://elevenlabs.io/app/default-voices) and copy the voice ID.
+
+### Model Configuration
+
+The agent uses **ElevenLabs Turbo v2.5** (`elevenlabs/eleven_turbo_v2_5`) for low-latency, high-quality speech synthesis. This model supports 32 languages and is optimized for real-time voice AI applications.
+
+To change the model or add custom parameters, edit [src/managers/agent-session-manager.ts](src/managers/agent-session-manager.ts:118-122).
+
 ## Handler-Based Architecture
 
 ### Using from Frontend
@@ -152,11 +219,12 @@ console.log(JSON.parse(response)); // { success: true, ... }
 
 ### Built-in Actions
 
-| Action  | Description               | Payload                        |
-| ------- | ------------------------- | ------------------------------ |
-| `say`   | Make the agent speak text | `{ text: string }`             |
-| `store` | Store text with an ID     | `{ id: string, text: string }` |
-| `play`  | Play stored text by ID    | `{ id: string }`               |
+| Action         | Description                        | Payload                        |
+| -------------- | ---------------------------------- | ------------------------------ |
+| `say`          | Make the agent speak text          | `{ text: string }`             |
+| `store`        | Store text with an ID              | `{ id: string, text: string }` |
+| `play`         | Play stored text by ID             | `{ id: string }`               |
+| `change_voice` | Change the TTS voice ID dynamically | `{ voice_id: string }`         |
 
 ### Creating Custom Handlers
 
@@ -200,14 +268,19 @@ handlerManager.registerAll([
 
 ```
 src/
-├── agent.ts              # Main agent entry point
-└── handlers/
-    ├── base.ts          # Base handler interface
-    ├── manager.ts       # Handler registration & routing
-    ├── say-handler.ts   # Built-in: say action
-    ├── store-handler.ts # Built-in: store action
-    ├── play-handler.ts  # Built-in: play action
-    └── index.ts         # Exports
+├── agent.ts                      # Main agent entry point
+├── handlers/
+│   ├── base.ts                  # Base handler interface
+│   ├── manager.ts               # Handler registration & routing
+│   ├── say-handler.ts           # Built-in: say action
+│   ├── store-handler.ts         # Built-in: store action
+│   ├── play-handler.ts          # Built-in: play action
+│   ├── change-voice-handler.ts  # Built-in: change voice action
+│   └── index.ts                 # Exports
+└── managers/
+    ├── agent-session-manager.ts # Session lifecycle & voice pipeline
+    ├── room-event-handler.ts    # Data event routing
+    └── session-registry.ts      # Active session tracking
 ```
 
 ## Deploying to production

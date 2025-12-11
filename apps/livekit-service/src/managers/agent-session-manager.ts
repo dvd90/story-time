@@ -6,14 +6,13 @@ import { BackgroundVoiceCancellation } from '@livekit/noise-cancellation-node';
 import { RoomEventHandler } from './room-event-handler.js';
 import { SessionRegistry } from './session-registry.js';
 
-/**
- * Context for the agent session
- */
 export interface SessionContext {
   session: voice.AgentSession;
   agent: voice.Agent;
   ctx: JobContext;
 }
+
+const DEFAULT_VOICE_ID = 'Xb7hH8MSUJpSbSDYk0k2';
 
 /**
  * Manages the lifecycle of an agent session
@@ -26,11 +25,15 @@ export class AgentSessionManager {
   private usageCollector!: metrics.UsageCollector;
   private eventHandler!: RoomEventHandler;
   private sessionRegistry: SessionRegistry;
+  private voiceId: string;
 
   constructor(ctx: JobContext, sessionRegistry: SessionRegistry) {
     this.ctx = ctx;
     this.sessionRegistry = sessionRegistry;
     this.roomName = ctx.job.room?.name ?? 'unknown';
+
+    this.voiceId = this.extractVoiceIdFromMetadata();
+
     this.agent = new voice.Agent({
       instructions: `You are the Story Time assistant, a helpful voice AI that helps users manage and play stories.
       The user is interacting with you via voice, even if you perceive the conversation as text.
@@ -40,6 +43,25 @@ export class AgentSessionManager {
 
       Note: The frontend can also send direct action commands to store, retrieve, and play stories through data messages.`,
     });
+  }
+
+  private extractVoiceIdFromMetadata(): string {
+    try {
+      const metadata = this.ctx.job.metadata;
+      if (metadata) {
+        const parsedMetadata = JSON.parse(metadata);
+        const voiceId = parsedMetadata.voice_id;
+        if (voiceId && typeof voiceId === 'string') {
+          console.log(`Using voice ID from metadata: ${voiceId}`);
+          return voiceId;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to parse job metadata for voice ID:', error);
+    }
+
+    console.log(`Using default voice ID: ${DEFAULT_VOICE_ID}`);
+    return DEFAULT_VOICE_ID;
   }
 
   /**
@@ -66,6 +88,28 @@ export class AgentSessionManager {
   }
 
   /**
+   * Update the voice ID and recreate the TTS
+   * Note: This will take effect on the next TTS generation
+   */
+  async updateVoiceId(newVoiceId: string): Promise<void> {
+    console.log(`Updating voice ID from ${this.voiceId} to ${newVoiceId}`);
+    this.voiceId = newVoiceId;
+
+    // Create new TTS instance with updated voice
+    const newTts = new inference.TTS({
+      model: 'elevenlabs/eleven_turbo_v2_5',
+      voice: this.voiceId,
+      language: 'en',
+    });
+
+    // Update the session's TTS
+    // Note: This will take effect on the next speech generation
+    this.session.tts = newTts;
+
+    console.log(`Voice updated successfully to ${newVoiceId}`);
+  }
+
+  /**
    * Create the voice pipeline
    */
   private async createVoicePipeline(): Promise<voice.AgentSession> {
@@ -81,10 +125,11 @@ export class AgentSessionManager {
         model: 'openai/gpt-4.1-mini',
       }),
 
-      // Text-to-speech (TTS)
+      // Text-to-speech (TTS) - ElevenLabs
       tts: new inference.TTS({
-        model: 'cartesia/sonic-3',
-        voice: '9626c31c-bec5-4cca-baa8-f8ba9e84c8bc',
+        model: 'elevenlabs/eleven_turbo_v2_5',
+        voice: this.voiceId,
+        language: 'en',
       }),
 
       // Turn detection
@@ -166,13 +211,16 @@ export class AgentSessionManager {
    * Subscribe to room events
    */
   private subscribeToEvents(): void {
-    this.eventHandler = new RoomEventHandler({
-      session: this.session,
-      agent: this.agent,
-      ctx: this.ctx,
-      roomName: this.roomName,
-      room: this.ctx.room,
-    });
+    this.eventHandler = new RoomEventHandler(
+      {
+        session: this.session,
+        agent: this.agent,
+        ctx: this.ctx,
+        roomName: this.roomName,
+        room: this.ctx.room,
+      },
+      this.sessionRegistry,
+    );
     this.eventHandler.subscribeToEvents();
   }
 

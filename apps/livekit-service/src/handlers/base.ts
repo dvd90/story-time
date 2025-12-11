@@ -26,6 +26,7 @@ export interface HandlerContext {
   ctx: JobContext;
   session: voice.AgentSession;
   request: ActionRequest;
+  roomName: string;
 }
 
 /**

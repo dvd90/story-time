@@ -9,10 +9,12 @@ export class HandlerManager {
   private handlers: Map<string, ActionHandler> = new Map();
   private ctx: JobContext;
   private session: voice.AgentSession;
+  private roomName: string;
 
-  constructor(ctx: JobContext, session: voice.AgentSession) {
+  constructor(ctx: JobContext, session: voice.AgentSession, roomName: string) {
     this.ctx = ctx;
     this.session = session;
+    this.roomName = roomName;
   }
 
   /**
@@ -89,6 +91,7 @@ export class HandlerManager {
         ctx: this.ctx,
         session: this.session,
         request,
+        roomName: this.roomName,
       });
     } catch (error) {
       console.error(
