@@ -11,8 +11,14 @@
   },
   "dependencies": {
     "@clerk/express": "^1.7.57",
+    "@elevenlabs/elevenlabs-js": "^2.27.0",
+    "@types/multer": "^2.0.0",
     "cors": "^2.8.5",
-    "express": "^4.21.0"
+    "dotenv": "^17.2.3",
+    "express": "^4.21.0",
+    "form-data": "^4.0.5",
+    "mongoose": "^9.0.1",
+    "multer": "^2.0.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

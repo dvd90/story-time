@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getUserId } from '../middleware/auth.js';
-import { store } from '../store.js';
-import type { StoryMode, StoryResponse, AudioChunk, AudioChunksResponse } from '../types.js';
+import { store, type StoryResponse } from '../store.js';
+import type { StoryMode } from '../db/index.js';
 
 const router = Router();
 
@@ -20,138 +20,186 @@ The meadow was home to friendly creatures who loved to play and sing. Every nigh
 And on this particular evening, a new friend was about to arrive, bringing with them the most wonderful adventure anyone had ever seen.`,
 ];
 
+// Audio chunk interface
+interface AudioChunk {
+  index: number;
+  text: string;
+  duration?: number;
+}
+
+interface AudioChunksResponse {
+  chunks: AudioChunk[];
+  voiceId: string;
+  totalChunks: number;
+}
+
 // POST /api/story/start - Start a new story
-router.post('/start', (req, res) => {
-  const { mode = 'predefined' } = req.body as { mode?: StoryMode };
+router.post('/start', async (req, res) => {
+  try {
+    const { mode = 'predefined' } = req.body as { mode?: StoryMode };
 
-  // Get authenticated user ID from Clerk
-  const clerkUserId = getUserId(req);
-  if (!clerkUserId) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
+    // Get authenticated user ID from Clerk
+    const clerkUserId = getUserId(req);
+    if (!clerkUserId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
 
-  // Validate mode
-  const validModes: StoryMode[] = ['predefined', 'generated', 'previous'];
-  if (!validModes.includes(mode)) {
-    res.status(400).json({
-      error: 'Invalid story mode',
-      validModes,
-    });
-    return;
-  }
+    // Validate mode
+    const validModes: StoryMode[] = ['predefined', 'generated', 'previous'];
+    if (!validModes.includes(mode)) {
+      res.status(400).json({
+        error: 'Invalid story mode',
+        validModes,
+      });
+      return;
+    }
 
-  // Get current user for personalization
-  const user = store.getUser(clerkUserId);
-  let storyText: string;
+    // Get current user for personalization
+    const user = await store.getUser(clerkUserId);
+    let storyText: string;
 
-  switch (mode) {
-    case 'predefined':
-      // Pick a random predefined story
-      storyText = PREDEFINED_STORIES[Math.floor(Math.random() * PREDEFINED_STORIES.length)];
-      break;
+    switch (mode) {
+      case 'predefined':
+        // Pick a random predefined story
+        storyText = PREDEFINED_STORIES[Math.floor(Math.random() * PREDEFINED_STORIES.length)];
+        break;
 
-    case 'previous':
-      // Get the most recent story for this user
-      const previousStory = store.getLatestStoryForUser(clerkUserId);
-      if (previousStory) {
-        storyText = previousStory.text;
-      } else {
-        // Fall back to predefined if no previous story
+      case 'previous':
+        // Get the most recent story for this user
+        const previousStory = await store.getLatestStoryForUser(clerkUserId);
+        if (previousStory) {
+          storyText = previousStory.text;
+        } else {
+          // Fall back to predefined if no previous story
+          storyText = PREDEFINED_STORIES[0];
+        }
+        break;
+
+      case 'generated':
+        // For Phase 1, return mock generated story
+        // Will be replaced with real LLM call in Phase 2
+        const childName = user?.childName || 'little one';
+        const parentName = user?.parentName || 'dear friend';
+        storyText = generateMockStory(childName, parentName);
+        break;
+
+      default:
         storyText = PREDEFINED_STORIES[0];
-      }
-      break;
+    }
 
-    case 'generated':
-      // For Phase 1, return mock generated story
-      // Will be replaced with real LLM call in Phase 2
-      const childName = user?.childName || 'little one';
-      const parentName = user?.parentName || 'dear friend';
-      storyText = generateMockStory(childName, parentName);
-      break;
+    // Parse into paragraphs (split by blank lines)
+    const paragraphs = storyText
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
 
-    default:
-      storyText = PREDEFINED_STORIES[0];
+    // Create story data
+    const storyData: Omit<StoryResponse, 'createdAt'> = {
+      storyId: generateStoryId(),
+      mode,
+      text: storyText,
+      paragraphs,
+    };
+
+    // Save story to MongoDB
+    const story = await store.saveStory(clerkUserId, storyData);
+
+    console.log(`📖 Story started [${mode}] - ${story.storyId} for user ${clerkUserId}`);
+
+    res.json({
+      success: true,
+      storyId: story.storyId,
+      mode,
+      text: storyText,
+      paragraphs,
+      paragraphCount: paragraphs.length,
+    });
+  } catch (error) {
+    console.error('❌ Story start error:', error);
+    res.status(500).json({ error: 'Failed to start story' });
   }
-
-  // Parse into paragraphs (split by blank lines)
-  const paragraphs = storyText
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
-
-  // Create story response
-  const story: StoryResponse = {
-    storyId: generateStoryId(),
-    mode,
-    text: storyText,
-    paragraphs,
-    createdAt: new Date(),
-  };
-
-  // Save story with user association
-  store.saveStory(story, clerkUserId);
-
-  console.log(`📖 Story started [${mode}] - ${story.storyId} for user ${clerkUserId}`);
-
-  res.json({
-    success: true,
-    storyId: story.storyId,
-    mode,
-    text: storyText,
-    paragraphs,
-    paragraphCount: paragraphs.length,
-  });
 });
 
 // POST /api/story/audio-chunks - Split story into audio-ready chunks
-router.post('/audio-chunks', (req, res) => {
-  const { storyText, voiceId } = req.body as { storyText?: string; voiceId?: string };
+router.post('/audio-chunks', async (req, res) => {
+  try {
+    const { storyText, voiceId } = req.body as { storyText?: string; voiceId?: string };
 
-  // Get authenticated user ID from Clerk
-  const clerkUserId = getUserId(req);
-  if (!clerkUserId) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
+    // Get authenticated user ID from Clerk
+    const clerkUserId = getUserId(req);
+    if (!clerkUserId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!storyText) {
+      res.status(400).json({
+        error: 'Missing required field: storyText',
+      });
+      return;
+    }
+
+    // Get voice ID from user if not provided
+    const user = await store.getUser(clerkUserId);
+    const effectiveVoiceId = voiceId || user?.chosenVoiceId || 'default';
+
+    // Split text into chunks (by paragraphs/sentences for natural pauses)
+    const chunks = splitIntoChunks(storyText);
+
+    const response: AudioChunksResponse = {
+      chunks,
+      voiceId: effectiveVoiceId,
+      totalChunks: chunks.length,
+    };
+
+    console.log(`🔊 Audio chunks created: ${chunks.length} chunks for voice ${effectiveVoiceId}`);
+
+    res.json(response);
+  } catch (error) {
+    console.error('❌ Audio chunks error:', error);
+    res.status(500).json({ error: 'Failed to create audio chunks' });
   }
+});
 
-  if (!storyText) {
-    res.status(400).json({
-      error: 'Missing required field: storyText',
+// GET /api/story/history - Get user's story history
+router.get('/history', async (req, res) => {
+  try {
+    const clerkUserId = getUserId(req);
+    if (!clerkUserId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const stories = await store.getStoriesForUser(clerkUserId);
+
+    res.json({
+      stories,
+      count: stories.length,
     });
-    return;
+  } catch (error) {
+    console.error('❌ Story history error:', error);
+    res.status(500).json({ error: 'Failed to retrieve story history' });
   }
-
-  // Get voice ID from user if not provided
-  const user = store.getUser(clerkUserId);
-  const effectiveVoiceId = voiceId || user?.chosenVoiceId || 'default';
-
-  // Split text into chunks (by paragraphs/sentences for natural pauses)
-  const chunks = splitIntoChunks(storyText);
-
-  const response: AudioChunksResponse = {
-    chunks,
-    voiceId: effectiveVoiceId,
-    totalChunks: chunks.length,
-  };
-
-  console.log(`🔊 Audio chunks created: ${chunks.length} chunks for voice ${effectiveVoiceId}`);
-
-  res.json(response);
 });
 
 // GET /api/story/:id - Get a specific story
-router.get('/:id', (req, res) => {
-  const story = store.getStory(req.params.id);
+router.get('/:id', async (req, res) => {
+  try {
+    const story = await store.getStory(req.params.id);
 
-  if (!story) {
-    res.status(404).json({
-      error: 'Story not found',
-    });
-    return;
+    if (!story) {
+      res.status(404).json({
+        error: 'Story not found',
+      });
+      return;
+    }
+
+    res.json(story);
+  } catch (error) {
+    console.error('❌ Get story error:', error);
+    res.status(500).json({ error: 'Failed to retrieve story' });
   }
-
-  res.json(story);
 });
 
 // Helper: Generate mock story with personalization
@@ -173,11 +221,11 @@ function splitIntoChunks(text: string): AudioChunk[] {
 
   const chunks: AudioChunk[] = [];
 
-  paragraphs.forEach((paragraph, paragraphIndex) => {
+  paragraphs.forEach((paragraph) => {
     // For longer paragraphs, split by sentences
     if (paragraph.length > 200) {
       const sentences = paragraph.match(/[^.!?]+[.!?]+/g) || [paragraph];
-      sentences.forEach((sentence, sentenceIndex) => {
+      sentences.forEach((sentence) => {
         chunks.push({
           index: chunks.length,
           text: sentence.trim(),
@@ -203,4 +251,3 @@ function generateStoryId(): string {
 }
 
 export default router;
-

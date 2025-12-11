@@ -7,11 +7,17 @@ const isPublicRoute = createRouteMatcher([
   '/api/connection-details(.*)',
 ]);
 
+// Routes that are protected but don't require onboarding check
+const isOnboardingRoute = createRouteMatcher(['/onboarding(.*)']);
+
 export default clerkMiddleware(async (auth, request) => {
-  // Protect all routes except public ones
-  if (!isPublicRoute(request)) {
-    await auth.protect();
+  // Allow public routes
+  if (isPublicRoute(request)) {
+    return;
   }
+
+  // Protect all other routes
+  await auth.protect();
 });
 
 export const config = {

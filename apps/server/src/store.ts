@@ -1,57 +1,131 @@
-import type { OnboardingData, StoryResponse } from './types.js';
+import { User, Story, type IUser, type IStory, type StoryMode } from './db/index.js';
 
-// Extended story response with user association
-interface StoredStory extends StoryResponse {
-  userId: string;
+// Response types for API compatibility
+export interface OnboardingData {
+  id: string;
+  parentName?: string;
+  childName?: string;
+  chosenVoice?: string;
+  chosenVoiceId?: string;
+  anamVoiceId?: string;
+  anamPersonaId?: string;
+  onboardingComplete: boolean;
+  createdAt: Date;
 }
 
-// In-memory storage for hackathon demo
+export interface StoryResponse {
+  storyId: string;
+  mode: StoryMode;
+  text: string;
+  paragraphs: string[];
+  createdAt: Date;
+}
+
+// MongoDB-backed store
 class Store {
-  private users: Map<string, OnboardingData> = new Map();
-  private stories: Map<string, StoredStory> = new Map();
-
   // User operations
-  saveUser(user: OnboardingData): void {
-    this.users.set(user.id, user);
+  async saveUser(
+    clerkId: string,
+    data: Partial<Omit<OnboardingData, 'id' | 'createdAt'>>
+  ): Promise<OnboardingData> {
+    const user = await User.findOneAndUpdate(
+      { clerkId },
+      {
+        clerkId,
+        ...data,
+      },
+      { upsert: true, new: true }
+    );
+
+    return this.toOnboardingData(user);
   }
 
-  getUser(id: string): OnboardingData | undefined {
-    return this.users.get(id);
+  async getUser(clerkId: string): Promise<OnboardingData | null> {
+    const user = await User.findOne({ clerkId });
+    return user ? this.toOnboardingData(user) : null;
   }
 
-  updateUserVoice(userId: string, voiceId: string): boolean {
-    const user = this.users.get(userId);
-    if (!user) return false;
-    user.chosenVoiceId = voiceId;
-    return true;
+  async updateUserVoice(clerkId: string, voiceId: string): Promise<boolean> {
+    const result = await User.updateOne({ clerkId }, { chosenVoiceId: voiceId });
+    return result.modifiedCount > 0;
+  }
+
+  async updateUserVoiceClone(
+    clerkId: string,
+    anamVoiceId: string,
+    anamPersonaId?: string
+  ): Promise<boolean> {
+    const result = await User.updateOne(
+      { clerkId },
+      {
+        anamVoiceId,
+        ...(anamPersonaId && { anamPersonaId }),
+      }
+    );
+    return result.modifiedCount > 0 || result.upsertedCount > 0;
+  }
+
+  async completeOnboarding(clerkId: string): Promise<boolean> {
+    const result = await User.updateOne({ clerkId }, { onboardingComplete: true });
+    return result.modifiedCount > 0;
   }
 
   // Story operations
-  saveStory(story: StoryResponse, userId: string): void {
-    this.stories.set(story.storyId, { ...story, userId });
+  async saveStory(
+    clerkUserId: string,
+    data: Omit<StoryResponse, 'createdAt'>
+  ): Promise<StoryResponse> {
+    const story = await Story.create({
+      storyId: data.storyId,
+      clerkUserId,
+      mode: data.mode,
+      text: data.text,
+      paragraphs: data.paragraphs,
+    });
+
+    return this.toStoryResponse(story);
   }
 
-  getStory(id: string): StoryResponse | undefined {
-    return this.stories.get(id);
+  async getStory(storyId: string): Promise<StoryResponse | null> {
+    const story = await Story.findOne({ storyId });
+    return story ? this.toStoryResponse(story) : null;
   }
 
-  getLatestStoryForUser(userId: string): StoryResponse | undefined {
-    const userStories = Array.from(this.stories.values())
-      .filter((story) => story.userId === userId);
-    if (userStories.length === 0) return undefined;
-    return userStories.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+  async getLatestStoryForUser(clerkUserId: string): Promise<StoryResponse | null> {
+    const story = await Story.findOne({ clerkUserId }).sort({ createdAt: -1 }).limit(1);
+    return story ? this.toStoryResponse(story) : null;
   }
 
-  getStoriesForUser(userId: string): StoryResponse[] {
-    return Array.from(this.stories.values())
-      .filter((story) => story.userId === userId);
+  async getStoriesForUser(clerkUserId: string): Promise<StoryResponse[]> {
+    const stories = await Story.find({ clerkUserId }).sort({ createdAt: -1 });
+    return stories.map((s) => this.toStoryResponse(s));
   }
 
-  getAllStories(): StoryResponse[] {
-    return Array.from(this.stories.values());
+  // Transform helpers
+  private toOnboardingData(user: IUser): OnboardingData {
+    return {
+      id: user.clerkId,
+      parentName: user.parentName,
+      childName: user.childName,
+      chosenVoice: user.chosenVoice,
+      chosenVoiceId: user.chosenVoiceId,
+      anamVoiceId: user.anamVoiceId,
+      anamPersonaId: user.anamPersonaId,
+      onboardingComplete: user.onboardingComplete,
+      createdAt: user.createdAt,
+    };
+  }
+
+  private toStoryResponse(story: IStory): StoryResponse {
+    return {
+      storyId: story.storyId,
+      mode: story.mode,
+      text: story.text,
+      paragraphs: story.paragraphs,
+      createdAt: story.createdAt,
+    };
   }
 }
 
 // Export singleton instance
 export const store = new Store();
-
