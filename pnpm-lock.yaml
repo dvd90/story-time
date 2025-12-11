@@ -114,32 +114,7 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  apps/server:
-    dependencies:
-      cors:
-        specifier: ^2.8.5
-        version: 2.8.5
-      express:
-        specifier: ^4.21.0
-        version: 4.22.1
-    devDependencies:
-      '@types/cors':
-        specifier: ^2.8.17
-        version: 2.8.19
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.2
-      tsx:
-        specifier: ^4.19.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.6.0
-        version: 5.9.3
-
-  apps/story-time-server:
+  apps/livekit-service:
     dependencies:
       '@livekit/agents':
         specifier: ^1.0.21
@@ -187,6 +162,31 @@ importers:
       typescript-eslint:
         specifier: ^8.46.2
         version: 8.49.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
+
+  apps/server:
+    dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.21.0
+        version: 4.22.1
+    devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.25
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.2
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
 
 packages:
 
